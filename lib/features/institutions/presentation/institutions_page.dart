@@ -26,12 +26,13 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
   /// null = tous ; true = actives ; false = inactives.
   bool? _statusFilter;
 
-  /// Accordion exclusif : une seule clé ouverte à la fois.
+  /// Accordion de département ouvert (pour l’ouvrir après une recherche).
   String? _expandedDepartmentKey;
+  String? _lastAutoExpand;
+  var _autoExpandScheduled = false;
 
-  /// Les deux bandes de filtres sont repliées pour laisser la liste visible.
-  bool _filtersOpen = false;
-  bool _departmentsOpen = false;
+  final _departmentsTile = ExpansibleController();
+  final Map<String, ExpansibleController> _deptTiles = {};
 
   @override
   void initState() {
@@ -43,6 +44,10 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
   @override
   void dispose() {
     _search.dispose();
+    _departmentsTile.dispose();
+    for (final controller in _deptTiles.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -198,7 +203,6 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
   List<Widget> _departmentSection({
     required String title,
     required List<_DepartmentGroup> groups,
-    required String? expandedKey,
     required String countNoun,
   }) {
     if (groups.isEmpty) return const [];
@@ -218,18 +222,19 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
       for (final group in groups) ...[
         Card(
           clipBehavior: Clip.antiAlias,
+          margin: const EdgeInsets.only(bottom: 8),
           child: ExpansionTile(
-            key: ValueKey('dept-${group.key}-$expandedKey'),
-            initiallyExpanded: expandedKey == group.key,
+            key: PageStorageKey<String>(group.key),
+            controller: _deptController(group.key),
+            minTileHeight: 52,
             maintainState: true,
             onExpansionChanged: (expanded) {
-              setState(() {
-                if (expanded) {
-                  _expandedDepartmentKey = group.key;
-                } else if (_expandedDepartmentKey == group.key) {
-                  _expandedDepartmentKey = null;
+              if (!expanded) return;
+              for (final entry in _deptTiles.entries) {
+                if (entry.key != group.key && entry.value.isExpanded) {
+                  entry.value.collapse();
                 }
-              });
+              }
             },
             title: Text(
               group.label,
@@ -257,10 +262,34 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
             ],
           ),
         ),
-        const SizedBox(height: 8),
       ],
-      const SizedBox(height: 12),
     ];
+  }
+
+  ExpansibleController _deptController(String key) {
+    return _deptTiles.putIfAbsent(key, ExpansibleController.new);
+  }
+
+  /// Ouvre un département après une recherche, sans recréer la tuile
+  /// (la recréation annule le toucher sur téléphone).
+  void _scheduleAutoExpand(String? key) {
+    if (key == null || key == _lastAutoExpand || _autoExpandScheduled) return;
+    _autoExpandScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _autoExpandScheduled = false;
+      if (!mounted) return;
+      final controller = _deptTiles[key];
+      if (controller == null) return;
+      _lastAutoExpand = key;
+      if (!controller.isExpanded) controller.expand();
+    });
+  }
+
+  void _openDepartmentsTile() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!_departmentsTile.isExpanded) _departmentsTile.expand();
+    });
   }
 
   /// Clé d’accordion à ouvrir (sans muter l’état pendant le build).
@@ -322,7 +351,7 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
           );
       setState(() {
         _search.text = label;
-        _departmentsOpen = true;
+        _openDepartmentsTile();
         if (option != null) {
           _selectedDepartmentKeys
             ..clear()
@@ -409,101 +438,111 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
                 final expandedKey = _effectiveExpandedKey(
                   [...communeGroups, ...policeGroups],
                 );
+                _scheduleAutoExpand(expandedKey);
                 final suggestions =
                     _searchSuggestions(deptOptions, allGrouped);
+                final filters = _FilterBar(
+                  typeFilter: _typeFilter,
+                  onTypeChanged: (v) => setState(() => _typeFilter = v),
+                  statusFilter: _statusFilter,
+                  onStatusChanged: (v) => setState(() => _statusFilter = v),
+                  searchController: _search,
+                  onSearchChanged: () => setState(() {}),
+                  suggestions: suggestions,
+                  onSuggestionSelected: (s) =>
+                      _applySuggestion(s, deptOptions),
+                  departmentOptions: deptOptions,
+                  selectedDepartmentKeys: _selectedDepartmentKeys,
+                  onToggleDepartment: (key) {
+                    setState(() {
+                      if (_selectedDepartmentKeys.contains(key)) {
+                        _selectedDepartmentKeys.remove(key);
+                      } else {
+                        _selectedDepartmentKeys.add(key);
+                      }
+                      if (_selectedDepartmentKeys.length == 1) {
+                        _expandedDepartmentKey = null;
+                        _lastAutoExpand = null;
+                      }
+                    });
+                  },
+                  onClearDepartments: () {
+                    setState(_selectedDepartmentKeys.clear);
+                  },
+                  departmentsTile: _departmentsTile,
+                  onReset: () {
+                    setState(() {
+                      _typeFilter = InstitutionTypeFilter.all;
+                      _statusFilter = null;
+                      _search.clear();
+                      _selectedDepartmentKeys.clear();
+                    });
+                  },
+                  onReload: _busyId == null ? _reload : null,
+                  resultCount: rows.length,
+                  totalCount: allRows.length,
+                );
+                final sections = <Widget>[
+                  if (rows.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: Center(
+                        child: Text(
+                          'Aucune institution pour ce filtre.',
+                          style: TextStyle(color: AppTheme.muted),
+                        ),
+                      ),
+                    )
+                  else ...[
+                    ..._departmentSection(
+                      title: 'Communes par département',
+                      groups: communeGroups,
+                      countNoun: 'commune',
+                    ),
+                    ..._departmentSection(
+                      title: 'Police républicaine par département',
+                      groups: policeGroups,
+                      countNoun: 'commissariat',
+                    ),
+                    if (others.isNotEmpty) ...[
+                      _SectionLabel(
+                        'Autres institutions',
+                        detail: '${others.length}',
+                      ),
+                      const SizedBox(height: 8),
+                      Card(
+                        clipBehavior: Clip.antiAlias,
+                        child: _InstitutionTable(
+                          items: others,
+                          busyId: _busyId,
+                          showTypeColumn: true,
+                          onToggle: _onToggle,
+                          onOpenEmails: _openEmails,
+                        ),
+                      ),
+                    ],
+                  ],
+                ];
+
+                final scrollTogether = compact ||
+                    MediaQuery.sizeOf(context).height < 760;
+                if (scrollTogether) {
+                  return ListView(
+                    children: [
+                      filters,
+                      const SizedBox(height: 12),
+                      ...sections,
+                    ],
+                  );
+                }
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _FilterBar(
-                      typeFilter: _typeFilter,
-                      onTypeChanged: (v) => setState(() => _typeFilter = v),
-                      statusFilter: _statusFilter,
-                      onStatusChanged: (v) =>
-                          setState(() => _statusFilter = v),
-                      searchController: _search,
-                      onSearchChanged: () => setState(() {}),
-                      suggestions: suggestions,
-                      onSuggestionSelected: (s) =>
-                          _applySuggestion(s, deptOptions),
-                      departmentOptions: deptOptions,
-                      selectedDepartmentKeys: _selectedDepartmentKeys,
-                      onToggleDepartment: (key) {
-                        setState(() {
-                          if (_selectedDepartmentKeys.contains(key)) {
-                            _selectedDepartmentKeys.remove(key);
-                          } else {
-                            _selectedDepartmentKeys.add(key);
-                          }
-                          if (_selectedDepartmentKeys.length == 1) {
-                            _expandedDepartmentKey = null;
-                          }
-                        });
-                      },
-                      onClearDepartments: () {
-                        setState(_selectedDepartmentKeys.clear);
-                      },
-                      filtersOpen: _filtersOpen,
-                      departmentsOpen: _departmentsOpen,
-                      onToggleFilters: () =>
-                          setState(() => _filtersOpen = !_filtersOpen),
-                      onToggleDepartments: () => setState(
-                        () => _departmentsOpen = !_departmentsOpen,
-                      ),
-                      onReset: () {
-                        setState(() {
-                          _typeFilter = InstitutionTypeFilter.all;
-                          _statusFilter = null;
-                          _search.clear();
-                          _selectedDepartmentKeys.clear();
-                        });
-                      },
-                      onReload: _busyId == null ? _reload : null,
-                      resultCount: rows.length,
-                      totalCount: allRows.length,
-                    ),
+                    filters,
                     const SizedBox(height: 12),
                     Expanded(
-                      child: rows.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Aucune institution pour ce filtre.',
-                                style: TextStyle(color: AppTheme.muted),
-                              ),
-                            )
-                          : ListView(
-                              children: [
-                                ..._departmentSection(
-                                  title: 'Communes par département',
-                                  groups: communeGroups,
-                                  expandedKey: expandedKey,
-                                  countNoun: 'commune',
-                                ),
-                                ..._departmentSection(
-                                  title: 'Police républicaine par département',
-                                  groups: policeGroups,
-                                  expandedKey: expandedKey,
-                                  countNoun: 'commissariat',
-                                ),
-                                if (others.isNotEmpty) ...[
-                                  _SectionLabel(
-                                    'Autres institutions',
-                                    detail: '${others.length}',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Card(
-                                    clipBehavior: Clip.antiAlias,
-                                    child: _InstitutionTable(
-                                      items: others,
-                                      busyId: _busyId,
-                                      showTypeColumn: true,
-                                      onToggle: _onToggle,
-                                      onOpenEmails: _openEmails,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
+                      child: ListView(children: sections),
                     ),
                   ],
                 );
@@ -530,10 +569,7 @@ class _FilterBar extends StatelessWidget {
     required this.selectedDepartmentKeys,
     required this.onToggleDepartment,
     required this.onClearDepartments,
-    required this.filtersOpen,
-    required this.departmentsOpen,
-    required this.onToggleFilters,
-    required this.onToggleDepartments,
+    required this.departmentsTile,
     required this.onReset,
     required this.onReload,
     required this.resultCount,
@@ -552,10 +588,7 @@ class _FilterBar extends StatelessWidget {
   final Set<String> selectedDepartmentKeys;
   final ValueChanged<String> onToggleDepartment;
   final VoidCallback onClearDepartments;
-  final bool filtersOpen;
-  final bool departmentsOpen;
-  final VoidCallback onToggleFilters;
-  final VoidCallback onToggleDepartments;
+  final ExpansibleController departmentsTile;
   final VoidCallback onReset;
   final VoidCallback? onReload;
   final int resultCount;
@@ -628,8 +661,17 @@ class _FilterBar extends StatelessWidget {
                 ),
               ),
             ),
-            if (_filtersActive)
-              TextButton(onPressed: onReset, child: const Text('Réinitialiser')),
+            if (_filtersActive && MediaQuery.sizeOf(context).width < 520)
+              IconButton(
+                tooltip: 'Réinitialiser',
+                onPressed: onReset,
+                icon: const Icon(Icons.filter_alt_off_outlined),
+              )
+            else if (_filtersActive)
+              TextButton(
+                onPressed: onReset,
+                child: const Text('Réinitialiser'),
+              ),
             IconButton(
               tooltip: 'Rafraîchir',
               onPressed: onReload,
@@ -668,10 +710,8 @@ class _FilterBar extends StatelessWidget {
           title: 'Filtres',
           summary: _filterSummary,
           icon: Icons.tune,
-          expanded: filtersOpen,
           highlighted: typeFilter != InstitutionTypeFilter.all ||
               statusFilter != null,
-          onToggle: onToggleFilters,
           child: Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -703,9 +743,8 @@ class _FilterBar extends StatelessWidget {
             title: 'Départements',
             summary: _departmentSummary,
             icon: Icons.map_outlined,
-            expanded: departmentsOpen,
             highlighted: selectedDepartmentKeys.isNotEmpty,
-            onToggle: onToggleDepartments,
+            controller: departmentsTile,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -774,18 +813,16 @@ class _FoldPanel extends StatelessWidget {
     required this.title,
     required this.summary,
     required this.icon,
-    required this.expanded,
-    required this.onToggle,
     required this.child,
+    this.controller,
     this.highlighted = false,
   });
 
   final String title;
   final String summary;
   final IconData icon;
-  final bool expanded;
-  final VoidCallback onToggle;
   final Widget child;
+  final ExpansibleController? controller;
   final bool highlighted;
 
   @override
@@ -793,66 +830,37 @@ class _FoldPanel extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            onTap: onToggle,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
-              child: Row(
-                children: [
-                  Icon(
-                    icon,
-                    size: 18,
-                    color: highlighted ? AppTheme.accent : AppTheme.muted,
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: AppTheme.ink,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      summary,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.end,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: highlighted ? AppTheme.accent : AppTheme.muted,
-                        fontWeight:
-                            highlighted ? FontWeight.w600 : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  Icon(
-                    expanded ? Icons.expand_less : Icons.expand_more,
-                    color: AppTheme.muted,
-                  ),
-                ],
-              ),
-            ),
+      child: ExpansionTile(
+        key: PageStorageKey<String>(title),
+        controller: controller,
+        minTileHeight: 52,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+        leading: Icon(
+          icon,
+          size: 20,
+          color: highlighted ? AppTheme.accent : AppTheme.muted,
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+            color: AppTheme.ink,
           ),
-          AnimatedCrossFade(
-            firstChild: const SizedBox(width: double.infinity),
-            secondChild: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: child,
-            ),
-            crossFadeState: expanded
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            alignment: Alignment.topCenter,
-            duration: const Duration(milliseconds: 180),
-            sizeCurve: Curves.easeOutCubic,
+        ),
+        subtitle: Text(
+          summary,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            color: highlighted ? AppTheme.accent : AppTheme.muted,
+            fontWeight: highlighted ? FontWeight.w600 : FontWeight.w500,
           ),
-        ],
+        ),
+        children: [child],
       ),
     );
   }
@@ -879,23 +887,33 @@ class _InstitutionTable extends StatelessWidget {
       return Column(
         children: [
           for (var i = 0; i < items.length; i++) ...[
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-              title: Text(
-                items[i].name,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                [
-                  if (showTypeColumn) items[i].typeLabel,
-                  items[i].slug ?? '—',
-                  '${items[i].mailboxCount} boîtes',
-                ].join(' · '),
-                style: const TextStyle(fontSize: 12, color: AppTheme.muted),
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+              child: Row(
                 children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          items[i].name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          [
+                            if (showTypeColumn) items[i].typeLabel,
+                            items[i].slug ?? '—',
+                            '${items[i].mailboxCount} boîtes',
+                          ].join(' · '),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   if (busyId == items[i].id)
                     const SizedBox(
                       width: 18,
