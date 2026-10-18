@@ -325,8 +325,9 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 760;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      padding: EdgeInsets.fromLTRB(compact ? 12 : 20, 12, compact ? 12 : 20, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -580,7 +581,9 @@ class _FilterBar extends StatelessWidget {
               checkmarkColor: AppTheme.accent,
             ),
             SizedBox(
-              width: 300,
+              width: MediaQuery.sizeOf(context).width < 520
+                  ? MediaQuery.sizeOf(context).width - 40
+                  : 300,
               child: TextField(
                 controller: searchController,
                 onChanged: (_) => onSearchChanged(),
@@ -631,7 +634,9 @@ class _FilterBar extends StatelessWidget {
         ],
         if (departmentOptions.isNotEmpty) ...[
           const SizedBox(height: 10),
-          Row(
+          Wrap(
+            spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               const Text(
                 'Départements (cocher pour filtrer)',
@@ -641,7 +646,6 @@ class _FilterBar extends StatelessWidget {
                   color: AppTheme.muted,
                 ),
               ),
-              const SizedBox(width: 8),
               if (selectedDepartmentKeys.isNotEmpty)
                 TextButton(
                   onPressed: onClearDepartments,
@@ -688,6 +692,53 @@ class _InstitutionTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (MediaQuery.sizeOf(context).width < 760) {
+      return Column(
+        children: [
+          for (final item in items)
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              title: Text(
+                item.name,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                [
+                  if (showTypeColumn) item.typeLabel,
+                  item.slug ?? '—',
+                  '${item.mailboxCount} boîtes',
+                ].join(' · '),
+                style: const TextStyle(fontSize: 12, color: AppTheme.muted),
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (busyId == item.id)
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    Switch(
+                      value: item.platformEnabled,
+                      onChanged: busyId != null
+                          ? null
+                          : (value) => onToggle(item, value),
+                    ),
+                  if (item.canViewEmails)
+                    IconButton(
+                      tooltip: 'Voir les e-mails',
+                      onPressed: busyId != null ? null : () => onOpenEmails(item),
+                      icon: const Icon(Icons.mail_outline, size: 20),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      );
+    }
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(

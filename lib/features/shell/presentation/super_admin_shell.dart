@@ -68,6 +68,63 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
           'Monitoring IA',
         ];
 
+        final compact = MediaQuery.sizeOf(context).width < 840;
+        if (compact) {
+          return Scaffold(
+            appBar: AppBar(
+              title: Text(titles[_index]),
+              actions: [
+                IconButton(
+                  tooltip: 'Déconnexion',
+                  onPressed: () => Supabase.instance.client.auth.signOut(),
+                  icon: const Icon(Icons.logout),
+                ),
+              ],
+            ),
+            drawer: Drawer(
+              child: SafeArea(
+                child: Builder(
+                  builder: (drawerContext) {
+                    return ListView(
+                      children: [
+                        ListTile(
+                          leading: const Icon(
+                            Icons.shield_outlined,
+                            color: AppTheme.accent,
+                          ),
+                          title: const Text(
+                            'Koffi Super Admin',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          subtitle: Text(
+                            email,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const Divider(),
+                        for (var i = 0; i < titles.length; i++)
+                          ListTile(
+                            selected: _index == i,
+                            leading: destinations[i].icon,
+                            title: Text(titles[i] == 'Communes actives'
+                                ? 'Communes actives ($activeCount)'
+                                : titles[i]),
+                            onTap: () {
+                              setState(() => _index = i);
+                              Navigator.pop(drawerContext);
+                            },
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+            body: _buildBody(),
+          );
+        }
+
         return Scaffold(
           body: Row(
             children: [

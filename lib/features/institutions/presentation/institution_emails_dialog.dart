@@ -176,8 +176,13 @@ class _InstitutionEmailsDialogState extends State<InstitutionEmailsDialog> {
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     final width = size.width;
-    final maxTableHeight = (size.height * 0.62).clamp(360.0, 640.0);
+    final compact = width < 720;
+    final maxTableHeight = (size.height * 0.5).clamp(180.0, 640.0);
     return AlertDialog(
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: compact ? 12 : 40,
+        vertical: 16,
+      ),
       title: FutureBuilder<_EmailsBundle>(
         future: _future,
         builder: (context, snapshot) {
@@ -187,7 +192,7 @@ class _InstitutionEmailsDialogState extends State<InstitutionEmailsDialog> {
         },
       ),
       content: SizedBox(
-        width: width < 720 ? width * 0.92 : 720,
+        width: compact ? width - 48 : 720,
         child: FutureBuilder<_EmailsBundle>(
           future: _future,
           builder: (context, snapshot) {
@@ -214,6 +219,68 @@ class _InstitutionEmailsDialogState extends State<InstitutionEmailsDialog> {
             final byEmail = {
               for (final c in bundle.credentials) c.email.toLowerCase(): c,
             };
+            if (compact) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: maxTableHeight),
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final mail in bundle.emails)
+                          Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 10, 4, 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    mail.labelWithSigle,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  _CopyLine(
+                                    value: mail.email,
+                                    copied: _justCopied
+                                        .contains('email:${mail.email}'),
+                                    tooltip: 'Copier l’e-mail',
+                                    onCopy: () => _copyEmail(mail.email),
+                                  ),
+                                  Builder(
+                                    builder: (context) {
+                                      final password = byEmail[
+                                              mail.email.toLowerCase()]
+                                          ?.password;
+                                      final hasPassword = password != null &&
+                                          password.isNotEmpty;
+                                      return _CopyLine(
+                                        value: hasPassword ? password : '—',
+                                        copied: _justCopied
+                                            .contains('pwd:${mail.email}'),
+                                        tooltip: 'Copier le mot de passe',
+                                        onCopy: hasPassword
+                                            ? () => _copyPassword(
+                                                  mail.email,
+                                                  password,
+                                                )
+                                            : null,
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -356,6 +423,36 @@ class _EmailsBundle {
 
   final List<InstitutionFunctionalEmail> emails;
   final List<InstitutionAgentCredential> credentials;
+}
+
+class _CopyLine extends StatelessWidget {
+  const _CopyLine({
+    required this.value,
+    required this.copied,
+    required this.tooltip,
+    required this.onCopy,
+  });
+
+  final String value;
+  final bool copied;
+  final String tooltip;
+  final VoidCallback? onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: SelectableText(
+            value,
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          ),
+        ),
+        if (onCopy != null)
+          _CopyButton(copied: copied, tooltip: tooltip, onCopy: onCopy!),
+      ],
+    );
+  }
 }
 
 class _CopyButton extends StatelessWidget {
