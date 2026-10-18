@@ -80,10 +80,10 @@ class _ActivatedCommunesPageState extends State<ActivatedCommunesPage> {
               ),
               const SizedBox(height: 4),
               const Text(
-                'Liste des communes / mairies activées (platform_enabled), par département.',
+                'Communes et mairies dont la plateforme est activée, classées par département.',
                 style: TextStyle(color: AppTheme.muted, fontSize: 13),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               Expanded(
                 child: _loading && items.isEmpty
                     ? const Center(child: CircularProgressIndicator())
@@ -94,32 +94,30 @@ class _ActivatedCommunesPageState extends State<ActivatedCommunesPage> {
                               style: TextStyle(color: AppTheme.muted),
                             ),
                           )
-                        : Card(
-                            clipBehavior: Clip.antiAlias,
-                            child: ListView.builder(
-                              itemCount: sections.length,
-                              itemBuilder: (context, index) {
-                                final section = sections[index];
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    Container(
-                                      color: const Color(0xFFF9FAFB),
-                                      padding: const EdgeInsets.fromLTRB(
-                                        16,
-                                        10,
-                                        16,
-                                        8,
-                                      ),
-                                      child: Text(
-                                        '${section.label} (${section.communes.length})',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 12,
-                                          color: AppTheme.ink,
-                                        ),
-                                      ),
+                        : ListView.separated(
+                            itemCount: sections.length,
+                            separatorBuilder: (context, index) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final section = sections[index];
+                              return Card(
+                                clipBehavior: Clip.antiAlias,
+                                margin: EdgeInsets.zero,
+                                child: ExpansionTile(
+                                  title: Text(
+                                    section.label,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
                                     ),
+                                  ),
+                                  subtitle: Text(
+                                    '${section.communes.length} commune${section.communes.length > 1 ? 's' : ''}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.muted,
+                                    ),
+                                  ),
+                                  children: [
                                     for (final item in section.communes)
                                       ListTile(
                                         leading: const Icon(
@@ -150,11 +148,10 @@ class _ActivatedCommunesPageState extends State<ActivatedCommunesPage> {
                                           ),
                                         ),
                                       ),
-                                    const Divider(height: 1),
                                   ],
-                                );
-                              },
-                            ),
+                                ),
+                              );
+                            },
                           ),
               ),
             ],

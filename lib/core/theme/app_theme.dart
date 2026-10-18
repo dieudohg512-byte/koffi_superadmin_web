@@ -92,6 +92,15 @@ abstract final class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         ),
       ),
+      expansionTileTheme: const ExpansionTileThemeData(
+        iconColor: accent,
+        collapsedIconColor: muted,
+        textColor: ink,
+        collapsedTextColor: ink,
+        shape: Border(),
+        collapsedShape: Border(),
+        tilePadding: EdgeInsets.symmetric(horizontal: 16),
+      ),
       cardTheme: CardThemeData(
         color: surface,
         elevation: 0,

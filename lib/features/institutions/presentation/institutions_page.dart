@@ -29,6 +29,10 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
   /// Accordion exclusif : une seule clé ouverte à la fois.
   String? _expandedDepartmentKey;
 
+  /// Les deux bandes de filtres sont repliées pour laisser la liste visible.
+  bool _filtersOpen = false;
+  bool _departmentsOpen = false;
+
   @override
   void initState() {
     super.initState();
@@ -199,7 +203,17 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
   }) {
     if (groups.isEmpty) return const [];
     return [
-      _SectionLabel(title),
+      _SectionLabel(
+        title,
+        detail: () {
+          final total = groups.fold<int>(0, (n, g) => n + g.communes.length);
+          final active = groups.fold<int>(
+            0,
+            (n, g) => n + g.communes.where((c) => c.platformEnabled).length,
+          );
+          return '$total · $active active${active > 1 ? 's' : ''}';
+        }(),
+      ),
       const SizedBox(height: 8),
       for (final group in groups) ...[
         Card(
@@ -308,6 +322,7 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
           );
       setState(() {
         _search.text = label;
+        _departmentsOpen = true;
         if (option != null) {
           _selectedDepartmentKeys
             ..clear()
@@ -331,22 +346,6 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Activation plateforme de toutes les institutions ROI.',
-                  style: TextStyle(color: AppTheme.muted, fontSize: 13),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Rafraîchir',
-                onPressed: _busyId == null ? _reload : null,
-                icon: const Icon(Icons.refresh),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
           Expanded(
             child: FutureBuilder<List<SuperAdminInstitution>>(
               future: _future,
@@ -444,6 +443,24 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
                       onClearDepartments: () {
                         setState(_selectedDepartmentKeys.clear);
                       },
+                      filtersOpen: _filtersOpen,
+                      departmentsOpen: _departmentsOpen,
+                      onToggleFilters: () =>
+                          setState(() => _filtersOpen = !_filtersOpen),
+                      onToggleDepartments: () => setState(
+                        () => _departmentsOpen = !_departmentsOpen,
+                      ),
+                      onReset: () {
+                        setState(() {
+                          _typeFilter = InstitutionTypeFilter.all;
+                          _statusFilter = null;
+                          _search.clear();
+                          _selectedDepartmentKeys.clear();
+                        });
+                      },
+                      onReload: _busyId == null ? _reload : null,
+                      resultCount: rows.length,
+                      totalCount: allRows.length,
                     ),
                     const SizedBox(height: 12),
                     Expanded(
@@ -469,7 +486,10 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
                                   countNoun: 'commissariat',
                                 ),
                                 if (others.isNotEmpty) ...[
-                                  const _SectionLabel('Autres institutions'),
+                                  _SectionLabel(
+                                    'Autres institutions',
+                                    detail: '${others.length}',
+                                  ),
                                   const SizedBox(height: 8),
                                   Card(
                                     clipBehavior: Clip.antiAlias,
@@ -510,6 +530,14 @@ class _FilterBar extends StatelessWidget {
     required this.selectedDepartmentKeys,
     required this.onToggleDepartment,
     required this.onClearDepartments,
+    required this.filtersOpen,
+    required this.departmentsOpen,
+    required this.onToggleFilters,
+    required this.onToggleDepartments,
+    required this.onReset,
+    required this.onReload,
+    required this.resultCount,
+    required this.totalCount,
   });
 
   final InstitutionTypeFilter typeFilter;
@@ -524,6 +552,42 @@ class _FilterBar extends StatelessWidget {
   final Set<String> selectedDepartmentKeys;
   final ValueChanged<String> onToggleDepartment;
   final VoidCallback onClearDepartments;
+  final bool filtersOpen;
+  final bool departmentsOpen;
+  final VoidCallback onToggleFilters;
+  final VoidCallback onToggleDepartments;
+  final VoidCallback onReset;
+  final VoidCallback? onReload;
+  final int resultCount;
+  final int totalCount;
+
+  bool get _filtersActive =>
+      typeFilter != InstitutionTypeFilter.all ||
+      statusFilter != null ||
+      searchController.text.trim().isNotEmpty ||
+      selectedDepartmentKeys.isNotEmpty;
+
+  String get _filterSummary {
+    final parts = <String>[
+      typeFilter.label,
+      if (statusFilter == true) 'Actives',
+      if (statusFilter == false) 'Inactives',
+      if (searchController.text.trim().isNotEmpty)
+        '« ${searchController.text.trim()} »',
+    ];
+    return parts.join(' · ');
+  }
+
+  String get _departmentSummary {
+    if (selectedDepartmentKeys.isEmpty) return 'Tous';
+    final labels = [
+      for (final option in departmentOptions)
+        if (selectedDepartmentKeys.contains(option.key)) option.label,
+    ];
+    if (labels.isEmpty) return '${selectedDepartmentKeys.length} sélectionnés';
+    if (labels.length <= 3) return labels.join(', ');
+    return '${labels.length} départements';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -535,55 +599,15 @@ class _FilterBar extends StatelessWidget {
             _foldText(option.label).contains(q))
           option,
     ];
+    final shown =
+        resultCount == totalCount ? '$resultCount' : '$resultCount / $totalCount';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
+        Row(
           children: [
-            for (final filter in InstitutionTypeFilter.values)
-              FilterChip(
-                label: Text(filter.label),
-                selected: typeFilter == filter,
-                onSelected: (_) => onTypeChanged(filter),
-                selectedColor: AppTheme.accentSoft,
-                checkmarkColor: AppTheme.accent,
-                labelStyle: TextStyle(
-                  color: typeFilter == filter ? AppTheme.accent : AppTheme.ink,
-                  fontWeight:
-                      typeFilter == filter ? FontWeight.w700 : FontWeight.w500,
-                  fontSize: 12,
-                ),
-                side: BorderSide(
-                  color: typeFilter == filter
-                      ? AppTheme.accent.withValues(alpha: 0.45)
-                      : AppTheme.border,
-                ),
-                backgroundColor: AppTheme.surface,
-              ),
-            FilterChip(
-              label: const Text('Communes actives'),
-              selected: statusFilter == true,
-              onSelected: (selected) =>
-                  onStatusChanged(selected ? true : null),
-              selectedColor: AppTheme.accentSoft,
-              checkmarkColor: AppTheme.accent,
-            ),
-            FilterChip(
-              label: const Text('Communes inactives'),
-              selected: statusFilter == false,
-              onSelected: (selected) =>
-                  onStatusChanged(selected ? false : null),
-              selectedColor: AppTheme.accentSoft,
-              checkmarkColor: AppTheme.accent,
-            ),
-            SizedBox(
-              width: MediaQuery.sizeOf(context).width < 520
-                  ? MediaQuery.sizeOf(context).width - 40
-                  : 300,
+            Expanded(
               child: TextField(
                 controller: searchController,
                 onChanged: (_) => onSearchChanged(),
@@ -603,6 +627,13 @@ class _FilterBar extends StatelessWidget {
                         ),
                 ),
               ),
+            ),
+            if (_filtersActive)
+              TextButton(onPressed: onReset, child: const Text('Réinitialiser')),
+            IconButton(
+              tooltip: 'Rafraîchir',
+              onPressed: onReload,
+              icon: const Icon(Icons.refresh),
             ),
           ],
         ),
@@ -632,45 +663,197 @@ class _FilterBar extends StatelessWidget {
             ],
           ),
         ],
-        if (departmentOptions.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Wrap(
+        const SizedBox(height: 8),
+        _FoldPanel(
+          title: 'Filtres',
+          summary: _filterSummary,
+          icon: Icons.tune,
+          expanded: filtersOpen,
+          highlighted: typeFilter != InstitutionTypeFilter.all ||
+              statusFilter != null,
+          onToggle: onToggleFilters,
+          child: Wrap(
             spacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: 8,
             children: [
-              const Text(
-                'Départements (cocher pour filtrer)',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                  color: AppTheme.muted,
+              for (final filter in InstitutionTypeFilter.values)
+                _choiceChip(
+                  label: filter.label,
+                  selected: typeFilter == filter,
+                  onSelected: () => onTypeChanged(filter),
                 ),
+              _choiceChip(
+                label: 'Actives',
+                selected: statusFilter == true,
+                onSelected: () =>
+                    onStatusChanged(statusFilter == true ? null : true),
               ),
-              if (selectedDepartmentKeys.isNotEmpty)
-                TextButton(
-                  onPressed: onClearDepartments,
-                  child: const Text('Tout effacer'),
-                ),
+              _choiceChip(
+                label: 'Inactives',
+                selected: statusFilter == false,
+                onSelected: () =>
+                    onStatusChanged(statusFilter == false ? null : false),
+              ),
             ],
           ),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final option in suggestedDepartments)
-                FilterChip(
-                  label: Text(option.label),
-                  selected: selectedDepartmentKeys.contains(option.key),
-                  onSelected: (_) => onToggleDepartment(option.key),
-                  selectedColor: AppTheme.accentSoft,
-                  checkmarkColor: AppTheme.accent,
-                  labelStyle: const TextStyle(fontSize: 12),
+        ),
+        if (departmentOptions.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _FoldPanel(
+            title: 'Départements',
+            summary: _departmentSummary,
+            icon: Icons.map_outlined,
+            expanded: departmentsOpen,
+            highlighted: selectedDepartmentKeys.isNotEmpty,
+            onToggle: onToggleDepartments,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (selectedDepartmentKeys.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: onClearDepartments,
+                      child: const Text('Tout effacer'),
+                    ),
+                  ),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final option in suggestedDepartments)
+                      _choiceChip(
+                        label: option.label,
+                        selected: selectedDepartmentKeys.contains(option.key),
+                        onSelected: () => onToggleDepartment(option.key),
+                      ),
+                  ],
                 ),
-            ],
+              ],
+            ),
           ),
         ],
+        const SizedBox(height: 8),
+        Text(
+          '$shown institution${resultCount > 1 ? 's' : ''}',
+          style: const TextStyle(fontSize: 12, color: AppTheme.muted),
+        ),
       ],
+    );
+  }
+
+  Widget _choiceChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onSelected,
+  }) {
+    return FilterChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onSelected(),
+      visualDensity: VisualDensity.compact,
+      selectedColor: AppTheme.accentSoft,
+      checkmarkColor: AppTheme.accent,
+      labelStyle: TextStyle(
+        color: selected ? AppTheme.accent : AppTheme.ink,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        fontSize: 12,
+      ),
+      side: BorderSide(
+        color: selected
+            ? AppTheme.accent.withValues(alpha: 0.45)
+            : AppTheme.border,
+      ),
+      backgroundColor: AppTheme.surface,
+    );
+  }
+}
+
+class _FoldPanel extends StatelessWidget {
+  const _FoldPanel({
+    required this.title,
+    required this.summary,
+    required this.icon,
+    required this.expanded,
+    required this.onToggle,
+    required this.child,
+    this.highlighted = false,
+  });
+
+  final String title;
+  final String summary;
+  final IconData icon;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final Widget child;
+  final bool highlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+              child: Row(
+                children: [
+                  Icon(
+                    icon,
+                    size: 18,
+                    color: highlighted ? AppTheme.accent : AppTheme.muted,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: AppTheme.ink,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      summary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: highlighted ? AppTheme.accent : AppTheme.muted,
+                        fontWeight:
+                            highlighted ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    color: AppTheme.muted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            firstChild: const SizedBox(width: double.infinity),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: child,
+            ),
+            crossFadeState: expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            alignment: Alignment.topCenter,
+            duration: const Duration(milliseconds: 180),
+            sizeCurve: Curves.easeOutCubic,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -695,25 +878,25 @@ class _InstitutionTable extends StatelessWidget {
     if (MediaQuery.sizeOf(context).width < 760) {
       return Column(
         children: [
-          for (final item in items)
+          for (var i = 0; i < items.length; i++) ...[
             ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 12),
               title: Text(
-                item.name,
+                items[i].name,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               subtitle: Text(
                 [
-                  if (showTypeColumn) item.typeLabel,
-                  item.slug ?? '—',
-                  '${item.mailboxCount} boîtes',
+                  if (showTypeColumn) items[i].typeLabel,
+                  items[i].slug ?? '—',
+                  '${items[i].mailboxCount} boîtes',
                 ].join(' · '),
                 style: const TextStyle(fontSize: 12, color: AppTheme.muted),
               ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (busyId == item.id)
+                  if (busyId == items[i].id)
                     const SizedBox(
                       width: 18,
                       height: 18,
@@ -721,20 +904,23 @@ class _InstitutionTable extends StatelessWidget {
                     )
                   else
                     Switch(
-                      value: item.platformEnabled,
+                      value: items[i].platformEnabled,
                       onChanged: busyId != null
                           ? null
-                          : (value) => onToggle(item, value),
+                          : (value) => onToggle(items[i], value),
                     ),
-                  if (item.canViewEmails)
+                  if (items[i].canViewEmails)
                     IconButton(
                       tooltip: 'Voir les e-mails',
-                      onPressed: busyId != null ? null : () => onOpenEmails(item),
+                      onPressed:
+                          busyId != null ? null : () => onOpenEmails(items[i]),
                       icon: const Icon(Icons.mail_outline, size: 20),
                     ),
                 ],
               ),
             ),
+            if (i != items.length - 1) const Divider(height: 1),
+          ],
         ],
       );
     }
@@ -747,7 +933,7 @@ class _InstitutionTable extends StatelessWidget {
           const DataColumn(label: Text('Nom')),
           const DataColumn(label: Text('Slug')),
           const DataColumn(label: Text('Statut')),
-          const DataColumn(label: Text('mailbox_count'), numeric: true),
+          const DataColumn(label: Text('Boîtes'), numeric: true),
           const DataColumn(label: Text('Actions')),
         ],
         rows: [
@@ -808,18 +994,42 @@ class _InstitutionTable extends StatelessWidget {
 }
 
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
+  const _SectionLabel(this.text, {this.detail});
 
   final String text;
+  final String? detail;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontWeight: FontWeight.w800,
-        fontSize: 13,
-        color: AppTheme.ink,
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 2),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 14,
+            decoration: BoxDecoration(
+              color: AppTheme.accent,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+              color: AppTheme.ink,
+            ),
+          ),
+          if (detail != null) ...[
+            const SizedBox(width: 8),
+            Text(
+              detail!,
+              style: const TextStyle(fontSize: 12, color: AppTheme.muted),
+            ),
+          ],
+        ],
       ),
     );
   }
