@@ -121,16 +121,36 @@ class InstitutionsRepository {
   }
 
   Future<InstitutionActivationResult> activateInstitution(
-    String institutionId,
-  ) async {
-    final raw = await _client.rpc(
-      'activate_institution',
-      params: {'p_institution_id': institutionId},
-    );
+    String institutionId, {
+    List<String>? modules,
+  }) async {
+    final params = <String, dynamic>{'p_institution_id': institutionId};
+    if (modules != null) {
+      params['p_modules'] = modules;
+    }
+    final raw = await _client.rpc('activate_institution', params: params);
     final activation = InstitutionActivationResult.fromJson(_asMap(raw));
     final provisioned = await provisionAccounts(institutionId);
     if (!provisioned.ok || provisioned.result == null) return activation;
     return activation.copyWith(credentials: provisioned.result!.credentials);
+  }
+
+  Future<List<String>> setInstitutionModules(
+    String institutionId,
+    List<String> modules,
+  ) async {
+    final raw = await _client.rpc(
+      'set_institution_modules',
+      params: {
+        'p_institution_id': institutionId,
+        'p_modules': modules,
+      },
+    );
+    if (raw is! List) return modules;
+    return [
+      for (final item in raw)
+        if ('$item'.trim().isNotEmpty) '$item'.trim().toLowerCase(),
+    ];
   }
 
   /// Auth + admin_users pour chaque e-mail de fonction (Edge Function).

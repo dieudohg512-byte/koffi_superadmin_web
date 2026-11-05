@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:koffi_superadmin_web/core/state/activated_communes_store.dart';
 import 'package:koffi_superadmin_web/core/theme/app_theme.dart';
 import 'package:koffi_superadmin_web/features/institutions/data/institutions_repository.dart';
+import 'package:koffi_superadmin_web/features/institutions/domain/institution_module.dart';
 import 'package:koffi_superadmin_web/features/institutions/domain/super_admin_institution.dart';
 import 'package:koffi_superadmin_web/features/institutions/presentation/institution_emails_dialog.dart';
+import 'package:koffi_superadmin_web/features/institutions/presentation/institution_modules_dialog.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class InstitutionsPage extends StatefulWidget {
@@ -74,12 +76,23 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
 
   Future<void> _onToggle(SuperAdminInstitution item, bool nextValue) async {
     if (_busyId != null) return;
+
+    List<String>? modules;
+    if (nextValue) {
+      modules = await showInstitutionModulesDialog(
+        context: context,
+        institution: item,
+        activating: true,
+      );
+      if (modules == null || !mounted) return;
+    }
+
     setState(() => _busyId = item.id);
     var openEmailsAfter = false;
     var emailsTitle = item.name;
     try {
       final result = nextValue
-          ? await _repository.activateInstitution(item.id)
+          ? await _repository.activateInstitution(item.id, modules: modules)
           : await _repository.deactivateInstitution(item.id);
       if (!mounted) return;
       _reload();
@@ -115,6 +128,36 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
     }
   }
 
+  Future<void> _editModules(SuperAdminInstitution item) async {
+    if (_busyId != null) return;
+    final modules = await showInstitutionModulesDialog(
+      context: context,
+      institution: item,
+      activating: false,
+    );
+    if (modules == null || !mounted) return;
+
+    setState(() => _busyId = item.id);
+    try {
+      await _repository.setInstitutionModules(item.id, modules);
+      if (!mounted) return;
+      _reload();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Modules mis à jour pour ${item.name}.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_friendlyError(e)),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busyId = null);
+    }
+  }
+
   String _friendlyError(Object error) {
     final text = error.toString();
     if (text.contains('not_super_admin')) {
@@ -122,6 +165,9 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
     }
     if (text.contains('institution_not_found')) {
       return 'Institution introuvable.';
+    }
+    if (text.contains('modules_required')) {
+      return 'Sélectionnez au moins un module.';
     }
     return 'Action impossible. Réessayez.';
   }
@@ -258,6 +304,7 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
                 showTypeColumn: false,
                 onToggle: _onToggle,
                 onOpenEmails: _openEmails,
+                onEditModules: _editModules,
               ),
             ],
           ),
@@ -518,6 +565,7 @@ class _InstitutionsPageState extends State<InstitutionsPage> {
                           showTypeColumn: true,
                           onToggle: _onToggle,
                           onOpenEmails: _openEmails,
+                          onEditModules: _editModules,
                         ),
                       ),
                     ],
@@ -873,6 +921,7 @@ class _InstitutionTable extends StatelessWidget {
     required this.showTypeColumn,
     required this.onToggle,
     required this.onOpenEmails,
+    required this.onEditModules,
   });
 
   final List<SuperAdminInstitution> items;
@@ -880,6 +929,13 @@ class _InstitutionTable extends StatelessWidget {
   final bool showTypeColumn;
   final Future<void> Function(SuperAdminInstitution, bool) onToggle;
   final Future<void> Function(SuperAdminInstitution) onOpenEmails;
+  final Future<void> Function(SuperAdminInstitution) onEditModules;
+
+  List<String> _modulesOf(SuperAdminInstitution item) {
+    if (item.enabledModules.isNotEmpty) return item.enabledModules;
+    if (!item.platformEnabled) return const [];
+    return InstitutionModule.defaultsForType(item.typeCode);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -889,51 +945,76 @@ class _InstitutionTable extends StatelessWidget {
           for (var i = 0; i < items.length; i++) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              items[i].name,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              [
+                                if (showTypeColumn) items[i].typeLabel,
+                                items[i].slug ?? '—',
+                                '${items[i].mailboxCount} boîtes',
+                              ].join(' · '),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (busyId == items[i].id)
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else
+                        Switch(
+                          value: items[i].platformEnabled,
+                          onChanged: busyId != null
+                              ? null
+                              : (value) => onToggle(items[i], value),
+                        ),
+                      if (items[i].platformEnabled)
+                        IconButton(
+                          tooltip: 'Modules',
+                          onPressed: busyId != null
+                              ? null
+                              : () => onEditModules(items[i]),
+                          icon: const Icon(Icons.extension_outlined, size: 20),
+                        ),
+                      if (items[i].canViewEmails)
+                        IconButton(
+                          tooltip: 'Voir les e-mails',
+                          onPressed: busyId != null
+                              ? null
+                              : () => onOpenEmails(items[i]),
+                          icon: const Icon(Icons.mail_outline, size: 20),
+                        ),
+                    ],
+                  ),
+                  if (_modulesOf(items[i]).isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
                       children: [
-                        Text(
-                          items[i].name,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          [
-                            if (showTypeColumn) items[i].typeLabel,
-                            items[i].slug ?? '—',
-                            '${items[i].mailboxCount} boîtes',
-                          ].join(' · '),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.muted,
-                          ),
-                        ),
+                        for (final code in _modulesOf(items[i]))
+                          _ModuleChip(code: code),
                       ],
                     ),
-                  ),
-                  if (busyId == items[i].id)
-                    const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else
-                    Switch(
-                      value: items[i].platformEnabled,
-                      onChanged: busyId != null
-                          ? null
-                          : (value) => onToggle(items[i], value),
-                    ),
-                  if (items[i].canViewEmails)
-                    IconButton(
-                      tooltip: 'Voir les e-mails',
-                      onPressed:
-                          busyId != null ? null : () => onOpenEmails(items[i]),
-                      icon: const Icon(Icons.mail_outline, size: 20),
-                    ),
+                  ],
                 ],
               ),
             ),
@@ -950,6 +1031,7 @@ class _InstitutionTable extends StatelessWidget {
           if (showTypeColumn) const DataColumn(label: Text('Type')),
           const DataColumn(label: Text('Nom')),
           const DataColumn(label: Text('Slug')),
+          const DataColumn(label: Text('Modules')),
           const DataColumn(label: Text('Statut')),
           const DataColumn(label: Text('Boîtes'), numeric: true),
           const DataColumn(label: Text('Actions')),
@@ -974,6 +1056,18 @@ class _InstitutionTable extends StatelessWidget {
                     ),
                   ),
                 ),
+                DataCell(
+                  _modulesOf(item).isEmpty
+                      ? const Text('—', style: TextStyle(color: AppTheme.muted))
+                      : Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: [
+                            for (final code in _modulesOf(item))
+                              _ModuleChip(code: code),
+                          ],
+                        ),
+                ),
                 DataCell(_StatusBadge(active: item.platformEnabled)),
                 DataCell(Text('${item.mailboxCount}')),
                 DataCell(
@@ -993,6 +1087,14 @@ class _InstitutionTable extends StatelessWidget {
                               ? null
                               : (value) => onToggle(item, value),
                         ),
+                      if (item.platformEnabled)
+                        IconButton(
+                          tooltip: 'Modules',
+                          onPressed: busyId != null
+                              ? null
+                              : () => onEditModules(item),
+                          icon: const Icon(Icons.extension_outlined, size: 20),
+                        ),
                       if (item.canViewEmails)
                         IconButton(
                           tooltip: 'Voir les e-mails',
@@ -1006,6 +1108,34 @@ class _InstitutionTable extends StatelessWidget {
               ],
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _ModuleChip extends StatelessWidget {
+  const _ModuleChip({required this.code});
+
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppTheme.accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.35)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        child: Text(
+          InstitutionModule.label(code),
+          style: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.accent,
+          ),
+        ),
       ),
     );
   }

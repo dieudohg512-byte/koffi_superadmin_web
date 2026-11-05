@@ -14,6 +14,7 @@ class SuperAdminInstitution {
     this.typeId,
     this.typeCode,
     this.typeName,
+    this.enabledModules = const [],
   });
 
   final String id;
@@ -30,6 +31,7 @@ class SuperAdminInstitution {
   final String? typeId;
   final String? typeCode;
   final String? typeName;
+  final List<String> enabledModules;
 
   bool get actif => platformEnabled;
 
@@ -73,6 +75,7 @@ class SuperAdminInstitution {
     String? departmentName,
     String? typeCode,
     String? typeName,
+    List<String>? enabledModules,
   }) {
     return SuperAdminInstitution(
       id: id,
@@ -87,6 +90,7 @@ class SuperAdminInstitution {
       typeId: typeId,
       typeCode: typeCode ?? this.typeCode,
       typeName: typeName ?? this.typeName,
+      enabledModules: enabledModules ?? this.enabledModules,
     );
   }
 
@@ -113,7 +117,16 @@ class SuperAdminInstitution {
       typeId: _nullableText(row['institution_type_id']),
       typeCode: _nullableText(row['institution_type_code']),
       typeName: _nullableText(row['institution_type_nom']),
+      enabledModules: _modulesFrom(row['enabled_modules'] ?? row['modules']),
     );
+  }
+
+  static List<String> _modulesFrom(Object? raw) {
+    if (raw is! List) return const [];
+    return [
+      for (final item in raw)
+        if ('$item'.trim().isNotEmpty) '$item'.trim().toLowerCase(),
+    ];
   }
 
   static String? _nullableText(Object? value) {
