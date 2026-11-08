@@ -5,6 +5,8 @@ abstract final class InstitutionModule {
   static const consultations = 'consultations';
   static const announcements = 'announcements';
   static const assemblies = 'assemblies';
+  static const diasporaEconomique = 'diaspora_economique';
+  static const protectionConsulaire = 'protection_consulaire';
 
   static const all = <String>[
     concerns,
@@ -12,6 +14,8 @@ abstract final class InstitutionModule {
     consultations,
     announcements,
     assemblies,
+    diasporaEconomique,
+    protectionConsulaire,
   ];
 
   static String label(String code) => switch (code) {
@@ -20,6 +24,8 @@ abstract final class InstitutionModule {
         consultations => 'Consultations',
         announcements => 'Annonces',
         assemblies => 'Assemblées',
+        diasporaEconomique => 'Diaspora économique',
+        protectionConsulaire => 'Protection consulaire',
         _ => code,
       };
 
@@ -29,6 +35,8 @@ abstract final class InstitutionModule {
         consultations => 'Scrutins et propositions citoyennes.',
         announcements => 'Communications officielles.',
         assemblies => 'Sessions audio / visioconférence.',
+        diasporaEconomique => 'Projets et difficultés d’investissement diaspora.',
+        protectionConsulaire => 'Signalements consulaires (Ambassades).',
         _ => '',
       };
 
@@ -42,6 +50,7 @@ abstract final class InstitutionModule {
           consultations,
           announcements,
           assemblies,
+          diasporaEconomique,
         ];
       case 'POLICE_REPUBLICAINE':
         return const [concerns, announcements];
@@ -50,6 +59,8 @@ abstract final class InstitutionModule {
       case 'MINISTERE':
       case 'CSCGC':
         return const [audiences];
+      case 'AMBASSADE':
+        return const [protectionConsulaire];
       default:
         return const [audiences];
     }

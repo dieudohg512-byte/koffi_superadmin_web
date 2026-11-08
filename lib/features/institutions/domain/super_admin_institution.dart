@@ -264,6 +264,7 @@ enum InstitutionTypeFilter {
   prefecture,
   ministere,
   cscgc,
+  ambassade,
   autres;
 
   String get label => switch (this) {
@@ -273,6 +274,7 @@ enum InstitutionTypeFilter {
         prefecture => 'Préfecture',
         ministere => 'Ministère',
         cscgc => 'CSCGC',
+        ambassade => 'Ambassade',
         autres => 'Autres',
       };
 
@@ -285,12 +287,14 @@ enum InstitutionTypeFilter {
       prefecture => code == 'PREFECTURE',
       ministere => code == 'MINISTERE',
       cscgc => code == 'CSCGC',
+      ambassade => code == 'AMBASSADE',
       autres =>
         !item.isCommune &&
             !item.isPoliceRepublicaine &&
             code != 'PREFECTURE' &&
             code != 'MINISTERE' &&
-            code != 'CSCGC',
+            code != 'CSCGC' &&
+            code != 'AMBASSADE',
     };
   }
 
@@ -302,6 +306,7 @@ enum InstitutionTypeFilter {
       'PREFECTURE' => 3,
       'MINISTERE' => 4,
       'CSCGC' => 5,
+      'AMBASSADE' => 6,
       _ => 9,
     };
   }
@@ -313,6 +318,7 @@ enum InstitutionTypeFilter {
     if (code == 'PREFECTURE') return 'Préfectures';
     if (code == 'MINISTERE') return 'Ministères';
     if (code == 'CSCGC') return 'CSCGC';
+    if (code == 'AMBASSADE') return 'Ambassades';
     return item.typeLabel == '—' ? 'Autres' : item.typeLabel;
   }
 }
