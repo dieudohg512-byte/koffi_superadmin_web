@@ -3,6 +3,7 @@ import 'package:koffi_superadmin_web/core/state/activated_communes_store.dart';
 import 'package:koffi_superadmin_web/core/theme/app_theme.dart';
 import 'package:koffi_superadmin_web/features/institutions/presentation/activated_communes_page.dart';
 import 'package:koffi_superadmin_web/features/institutions/presentation/institutions_page.dart';
+import 'package:koffi_superadmin_web/features/tourism/presentation/tourism_sites_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SuperAdminShell extends StatefulWidget {
@@ -44,6 +45,11 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
             label: Text('Communes actives ($activeCount)'),
           ),
           const NavigationRailDestination(
+            icon: Icon(Icons.travel_explore_outlined),
+            selectedIcon: Icon(Icons.travel_explore),
+            label: Text('Tourisme'),
+          ),
+          const NavigationRailDestination(
             icon: Icon(Icons.edit_note_outlined),
             selectedIcon: Icon(Icons.edit_note),
             label: Text('Éditeur ROI'),
@@ -63,6 +69,7 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
         const titles = [
           'Institutions',
           'Communes actives',
+          'Tourisme',
           'Éditeur ROI',
           'Comptes Super-Admin',
           'Monitoring IA',
@@ -228,11 +235,12 @@ class _SuperAdminShellState extends State<SuperAdminShell> {
     return switch (_index) {
       0 => const InstitutionsPage(),
       1 => const ActivatedCommunesPage(),
-      2 => const _PlaceholderPane(
+      2 => const TourismSitesPage(),
+      3 => const _PlaceholderPane(
           title: 'Éditeur ROI',
           subtitle: 'Édition des textes ROI — à venir.',
         ),
-      3 => const _PlaceholderPane(
+      4 => const _PlaceholderPane(
           title: 'Comptes Super-Admin',
           subtitle: 'Gestion des comptes Super-Admin — à venir.',
         ),

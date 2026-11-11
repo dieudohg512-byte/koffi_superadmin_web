@@ -7,6 +7,7 @@ abstract final class InstitutionModule {
   static const assemblies = 'assemblies';
   static const diasporaEconomique = 'diaspora_economique';
   static const protectionConsulaire = 'protection_consulaire';
+  static const tourismExperience = 'tourism_experience';
 
   static const all = <String>[
     concerns,
@@ -16,6 +17,7 @@ abstract final class InstitutionModule {
     assemblies,
     diasporaEconomique,
     protectionConsulaire,
+    tourismExperience,
   ];
 
   static String label(String code) => switch (code) {
@@ -26,6 +28,7 @@ abstract final class InstitutionModule {
         assemblies => 'Assemblées',
         diasporaEconomique => 'Diaspora économique',
         protectionConsulaire => 'Protection consulaire',
+        tourismExperience => 'Tourisme & expérience visiteurs',
         _ => code,
       };
 
@@ -37,6 +40,8 @@ abstract final class InstitutionModule {
         assemblies => 'Sessions audio / visioconférence.',
         diasporaEconomique => 'Projets et difficultés d’investissement diaspora.',
         protectionConsulaire => 'Signalements consulaires (Ambassades).',
+        tourismExperience =>
+          'Catalogue des sites, avis visiteurs, tableau de bord territorial.',
         _ => '',
       };
 
@@ -50,13 +55,21 @@ abstract final class InstitutionModule {
           consultations,
           announcements,
           assemblies,
+          audiences,
           diasporaEconomique,
+          tourismExperience,
         ];
       case 'POLICE_REPUBLICAINE':
         return const [concerns, announcements];
       case 'PREFECTURE':
-        return const [concerns, announcements];
+        return const [
+          concerns,
+          announcements,
+          audiences,
+          tourismExperience,
+        ];
       case 'MINISTERE':
+        return const [audiences, tourismExperience];
       case 'CSCGC':
         return const [audiences];
       case 'AMBASSADE':
