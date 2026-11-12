@@ -8,6 +8,7 @@ abstract final class InstitutionModule {
   static const diasporaEconomique = 'diaspora_economique';
   static const protectionConsulaire = 'protection_consulaire';
   static const tourismExperience = 'tourism_experience';
+  static const sanitationOperations = 'sanitation_operations';
 
   static const all = <String>[
     concerns,
@@ -18,6 +19,7 @@ abstract final class InstitutionModule {
     diasporaEconomique,
     protectionConsulaire,
     tourismExperience,
+    sanitationOperations,
   ];
 
   static String label(String code) => switch (code) {
@@ -29,6 +31,7 @@ abstract final class InstitutionModule {
         diasporaEconomique => 'Diaspora économique',
         protectionConsulaire => 'Protection consulaire',
         tourismExperience => 'Tourisme & expérience visiteurs',
+        sanitationOperations => 'Opérations de salubrité',
         _ => code,
       };
 
@@ -42,6 +45,8 @@ abstract final class InstitutionModule {
         protectionConsulaire => 'Signalements consulaires (Ambassades).',
         tourismExperience =>
           'Catalogue des sites, avis visiteurs, tableau de bord territorial.',
+        sanitationOperations =>
+          'Bureau opérateur (SGDS) : signalements, périmètre, dashboards.',
         _ => '',
       };
 
@@ -74,6 +79,8 @@ abstract final class InstitutionModule {
         return const [audiences];
       case 'AMBASSADE':
         return const [protectionConsulaire];
+      case 'OPERATEUR_SALUBRITE':
+        return const [sanitationOperations];
       default:
         return const [audiences];
     }
