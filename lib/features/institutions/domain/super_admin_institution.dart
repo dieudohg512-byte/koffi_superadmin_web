@@ -266,6 +266,8 @@ enum InstitutionTypeFilter {
   cscgc,
   ambassade,
   operateurSalubrite,
+  operateurElectricite,
+  operateurEau,
   autres;
 
   String get label => switch (this) {
@@ -277,6 +279,8 @@ enum InstitutionTypeFilter {
         cscgc => 'CSCGC',
         ambassade => 'Ambassade',
         operateurSalubrite => 'Opérateur salubrité',
+        operateurElectricite => 'Opérateur électricité',
+        operateurEau => 'Opérateur eau',
         autres => 'Autres',
       };
 
@@ -291,6 +295,8 @@ enum InstitutionTypeFilter {
       cscgc => code == 'CSCGC',
       ambassade => code == 'AMBASSADE',
       operateurSalubrite => code == 'OPERATEUR_SALUBRITE',
+      operateurElectricite => code == 'OPERATEUR_ELECTRICITE',
+      operateurEau => code == 'OPERATEUR_EAU',
       autres =>
         !item.isCommune &&
             !item.isPoliceRepublicaine &&
@@ -298,7 +304,9 @@ enum InstitutionTypeFilter {
             code != 'MINISTERE' &&
             code != 'CSCGC' &&
             code != 'AMBASSADE' &&
-            code != 'OPERATEUR_SALUBRITE',
+            code != 'OPERATEUR_SALUBRITE' &&
+            code != 'OPERATEUR_ELECTRICITE' &&
+            code != 'OPERATEUR_EAU',
     };
   }
 
@@ -312,7 +320,9 @@ enum InstitutionTypeFilter {
       'CSCGC' => 5,
       'AMBASSADE' => 6,
       'OPERATEUR_SALUBRITE' => 7,
-      _ => 9,
+      'OPERATEUR_ELECTRICITE' => 8,
+      'OPERATEUR_EAU' => 9,
+      _ => 10,
     };
   }
 
@@ -325,6 +335,8 @@ enum InstitutionTypeFilter {
     if (code == 'CSCGC') return 'CSCGC';
     if (code == 'AMBASSADE') return 'Ambassades';
     if (code == 'OPERATEUR_SALUBRITE') return 'Opérateurs de salubrité';
+    if (code == 'OPERATEUR_ELECTRICITE') return 'Opérateurs d’électricité';
+    if (code == 'OPERATEUR_EAU') return 'Opérateurs d’eau';
     return item.typeLabel == '—' ? 'Autres' : item.typeLabel;
   }
 }

@@ -9,6 +9,8 @@ abstract final class InstitutionModule {
   static const protectionConsulaire = 'protection_consulaire';
   static const tourismExperience = 'tourism_experience';
   static const sanitationOperations = 'sanitation_operations';
+  static const electricityOperations = 'electricity_operations';
+  static const waterOperations = 'water_operations';
 
   static const all = <String>[
     concerns,
@@ -20,6 +22,8 @@ abstract final class InstitutionModule {
     protectionConsulaire,
     tourismExperience,
     sanitationOperations,
+    electricityOperations,
+    waterOperations,
   ];
 
   static String label(String code) => switch (code) {
@@ -32,6 +36,8 @@ abstract final class InstitutionModule {
         protectionConsulaire => 'Protection consulaire',
         tourismExperience => 'Tourisme & expérience visiteurs',
         sanitationOperations => 'Opérations de salubrité',
+        electricityOperations => 'Opérations d’électricité',
+        waterOperations => 'Opérations d’eau',
         _ => code,
       };
 
@@ -47,6 +53,10 @@ abstract final class InstitutionModule {
           'Catalogue des sites, avis visiteurs, tableau de bord territorial.',
         sanitationOperations =>
           'Bureau opérateur (SGDS) : signalements, périmètre, dashboards.',
+        electricityOperations =>
+          'Bureau opérateur (SBEE) : pannes, réseau, réclamations.',
+        waterOperations =>
+          'Bureau opérateur (SONEB) : fuites, distribution, qualité.',
         _ => '',
       };
 
@@ -81,6 +91,10 @@ abstract final class InstitutionModule {
         return const [protectionConsulaire];
       case 'OPERATEUR_SALUBRITE':
         return const [sanitationOperations];
+      case 'OPERATEUR_ELECTRICITE':
+        return const [electricityOperations];
+      case 'OPERATEUR_EAU':
+        return const [waterOperations];
       default:
         return const [audiences];
     }
